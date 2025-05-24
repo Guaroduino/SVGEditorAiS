@@ -1,69 +1,88 @@
+import { recordState } from '../history.js';
+
 export function initShapeTool(options = { shapeType: 'rectangle' }) {
     const tool = new paper.Tool();
     let shapePath;
     let startPoint;
-    const shapeType = options.shapeType; // 'rectangle' or 'ellipse'
+    const shapeType = options.shapeType;
+
+    const resetShapeState = () => {
+        if (shapePath) {
+            shapePath.remove();
+            shapePath = null;
+        }
+        startPoint = null;
+    };
 
     tool.onPointerDown = function(event) {
+        if (window.isGesturing) return;
         if (event.event.pointerType === 'mouse' && event.event.button !== 0) return;
+        
+        resetShapeState(); // Clear any previous state
         startPoint = event.point;
-        // Placeholder for shape, actual shape drawn on drag
     }
 
     tool.onPointerDrag = function(event) {
+        if (window.isGesturing || !startPoint) return;
+
         if (shapePath) {
             shapePath.remove(); // Remove previous iteration of the shape
         }
 
-        const rect = new paper.Rectangle(startPoint, event.point);
-        if (rect.width === 0 || rect.height === 0) return; // Avoid zero-size shapes
+        const rectBounds = new paper.Rectangle(startPoint, event.point);
+        // Prevent zero-size shapes from causing issues
+        if (rectBounds.width < 0.1 && rectBounds.height < 0.1) { 
+             shapePath = null; // Ensure it's null so pointerUp doesn't try to record it
+             return; 
+        }
 
         if (shapeType === 'rectangle') {
             shapePath = new paper.Path.Rectangle({
-                rectangle: rect,
+                rectangle: rectBounds,
                 strokeColor: window.strokeColor,
-                fillColor: null, // Or window.fillColor if you want filled rectangles by default
+                // fillColor: window.fillColor, // Uncomment if shapes should be filled by default
                 strokeWidth: window.strokeWidth
             });
         } else if (shapeType === 'ellipse') {
             shapePath = new paper.Path.Ellipse({
-                rectangle: rect, // Ellipse defined by a bounding box
+                rectangle: rectBounds,
                 strokeColor: window.strokeColor,
-                fillColor: null, // Or window.fillColor
+                // fillColor: window.fillColor, // Uncomment if shapes should be filled by default
                 strokeWidth: window.strokeWidth
             });
         }
-         // For filled shapes:
-         // shapePath.fillColor = window.fillColor;
-         // shapePath.strokeColor = null; // Or a border color
     }
 
     tool.onPointerUp = function(event) {
-        if (shapePath) {
-            if (shapePath.bounds.width < 2 && shapePath.bounds.height < 2) {
-                shapePath.remove(); // Remove tiny shape
-            } else {
-                import('./../history.js').then(historyModule => historyModule.recordState());
-            }
+        if (!shapePath || !startPoint) return; // No shape started or cancelled
+
+        if (shapePath.bounds.width < 2 && shapePath.bounds.height < 2) { // Too small
+            shapePath.remove();
+        } else {
+            recordState();
         }
-        shapePath = null;
+        shapePath = null; // Reset for next shape
         startPoint = null;
     }
 
     tool.onPointerCancel = tool.onPointerUp;
 
     return {
-        activate: () => tool.activate(),
-        deactivate: () => {
-            if (shapePath) shapePath.remove();
-            shapePath = null;
-            startPoint = null;
+        activate: () => {
+            tool.activate();
+            resetShapeState();
         },
-        updateColor: (newColor) => {
-            // Global colors will be used for next shape.
-            // If you want to change fill/stroke behavior, update here.
-            window.strokeColor = newColor;
-            // window.fillColor = newColor; // If shapes are filled
-        }
+        deactivate: () => {
+            if (shapePath) { // If tool changed mid-draw
+                if (shapePath.bounds.width >=2 || shapePath.bounds.height >=2) recordState(); else shapePath.remove();
+            }
+            resetShapeState();
+        },
+        updateColor: (newColor) => { /* Global colors are used */ },
+        onGestureStart: () => {
+            // console.log("ShapeTool: Gesture detected, cancelling current shape.");
+            resetShapeState();
+        },
+        onGestureEnd: () => { /* console.log("ShapeTool: Gesture ended."); */ }
     };
 }
