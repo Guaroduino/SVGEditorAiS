@@ -1,0 +1,31 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>SVG Paper Editor</title>
+    <link rel="stylesheet" href="css/style.css">
+    <script type="text/javascript" src="https://cdnjs.cloudflare.com/ajax/libs/paper.js/0.12.17/paper-full.min.js"></script>
+</head>
+<body>
+    <div id="toolbar">
+        <button id="pencilToolBtn">Pencil</button>
+        <button id="lineToolBtn">Line</button>
+        <button id="rectToolBtn">Rect</button>
+        <button id="ellipseToolBtn">Ellipse</button>
+        <button id="eraserToolBtn">Eraser</button>
+        <button id="selectToolBtn">Select</button>
+        <button id="nodeEditToolBtn">Edit Nodes</button>
+        <input type="color" id="colorPicker" value="#000000">
+        <button id="undoBtn">Undo</button>
+        <button id="redoBtn">Redo</button>
+        <button id="exportSvgBtn">Export SVG</button>
+        <input type="file" id="importSvgInput" accept=".svg" style="display: none;">
+        <button id="importSvgBtn">Import SVG</button>
+        <button id="clearCanvasBtn">Clear</button>
+    </div>
+    <canvas id="paperCanvas" resize></canvas>
+
+    <script type="module" src="js/app.js"></script>
+</body>
+</html>

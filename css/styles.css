@@ -1,0 +1,44 @@
+body {
+    margin: 0;
+    font-family: sans-serif;
+    display: flex;
+    flex-direction: column;
+    height: 100vh;
+    overflow: hidden; /* Prevents scrollbars from interfering with canvas */
+    touch-action: none; /* Important for PointerEvents and custom pan/zoom */
+}
+
+#toolbar {
+    background-color: #f0f0f0;
+    padding: 8px;
+    display: flex;
+    flex-wrap: wrap; /* Allow buttons to wrap on smaller screens */
+    gap: 5px;
+    border-bottom: 1px solid #ccc;
+    z-index: 10;
+}
+
+#toolbar button, #toolbar input[type="color"] {
+    padding: 8px 12px;
+    border: 1px solid #ccc;
+    background-color: #fff;
+    cursor: pointer;
+    border-radius: 4px;
+}
+
+#toolbar button.active {
+    background-color: #007bff;
+    color: white;
+    border-color: #0056b3;
+}
+
+#toolbar input[type="color"] {
+    height: 36px; /* Match button height */
+    padding: 2px;
+}
+
+#paperCanvas {
+    flex-grow: 1; /* Canvas takes remaining space */
+    width: 100%;
+    background-color: #ffffff;
+}
