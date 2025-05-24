@@ -1,5 +1,3 @@
-// At the top of js/canvasInteraction.js
-import { getDistance, getMidpoint } from '../utils.js'; // Adjust path if necessary
 
 export function initCanvasInteraction(view) {
     // ... (declarations: lastPanPoint, lastPinchDist, activeTouches)
