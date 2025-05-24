@@ -1,4 +1,4 @@
-import { getDistance, getMidpoint } from '../utils.js'; // Make sure utils.js is correctly imported
+import { getDistance, getMidpoint } from './utils.js'; // Make sure utils.js is correctly imported
 
 export function initCanvasInteraction(view) {
     let lastPanPoint = null;
