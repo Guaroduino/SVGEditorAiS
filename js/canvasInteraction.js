@@ -1,102 +1,122 @@
-// This is a simplified pan/zoom. For robust multi-touch, a library or more complex logic is needed.
+import { getDistance, getMidpoint } from '../utils.js'; // Make sure utils.js is correctly imported
+
 export function initCanvasInteraction(view) {
     let lastPanPoint = null;
     let lastPinchDist = null;
-    const activeTouches = new Map(); // To track multiple touches
+    const activeTouches = new Map();
+    window.isGesturing = false; // Global flag to indicate if a multi-touch gesture is active
 
     const canvas = view.element;
 
     canvas.addEventListener('pointerdown', (event) => {
-        if (window.currentTool !== null && window.currentTool !== 'select' && window.currentTool !== 'nodeEdit') {
-            // If a drawing tool is active, let it handle the event
-            // Or, if specific gestures (e.g. two-finger pan) should override tools:
-            if (event.pointerType === 'touch' && activeTouches.size >= 1) { // Already one touch, this might be second for gesture
-                 // Allow gesture if activeTouches.size becomes 2 here.
-            } else {
-                return; // Let the active tool handle its own pointerdown
+        const currentAppToolKey = window.currentTool; // Key of the current tool, e.g., 'pencil'
+        const activeToolInstance = window.activeToolInstance; // The actual tool instance
+
+        // Determine if the current tool is a type that draws (and shouldn't operate during gestures)
+        const toolIsDrawingType = currentAppToolKey &&
+                                  currentAppToolKey !== 'select' &&
+                                  currentAppToolKey !== 'nodeEdit' &&
+                                  currentAppToolKey !== null;
+
+        activeTouches.set(event.pointerId, { x: event.clientX, y: event.clientY, id: event.pointerId });
+
+        if (event.pointerType === 'touch' && activeTouches.size >= 2) {
+            // This is the start of a multi-touch gesture (second finger down)
+            if (!window.isGesturing) {
+                window.isGesturing = true;
+                // console.log("Gesture started, attempting to notify active tool.");
+                if (activeToolInstance && activeToolInstance.onGestureStart) {
+                    activeToolInstance.onGestureStart(); // Notify the tool
+                }
             }
+            // Update gesture starting points
+            const touchesArray = Array.from(activeTouches.values());
+            // Ensure we have at least two distinct points for distance/midpoint
+            if (touchesArray.length >= 2) {
+                lastPinchDist = getDistance(touchesArray[0], touchesArray[1]);
+                lastPanPoint = getMidpoint(touchesArray[0], touchesArray[1]);
+            }
+        } else if (event.pointerType === 'touch' && activeTouches.size === 1 && toolIsDrawingType) {
+            // First touch for a drawing tool, let the tool handle it.
+            // canvasInteraction should not interfere with the tool's onPointerDown.
+            return;
+        } else if (event.pointerType === 'mouse' && toolIsDrawingType) {
+            // Mouse click for a drawing tool, let the tool handle it.
+            return;
         }
-        
-        // Prevent default browser actions like scrolling or pinch-zoom on the page
-        // event.preventDefault(); // Be careful with this, can break tool interactions if not handled correctly
-                                 // `touch-action: none;` in CSS is preferred for global control.
-
-        activeTouches.set(event.pointerId, {x: event.clientX, y: event.clientY });
-
-        if (activeTouches.size === 1 && (window.currentTool === null || window.currentTool === 'select' || window.currentTool === 'nodeEdit')) { // Single touch pan (if no tool or select tool)
-            // This condition might be too broad. Only pan if explicitly no tool is active or a "pan tool" is selected.
-            // For now, let select tool handle its own drag logic.
-            // lastPanPoint = new paper.Point(event.offsetX, event.offsetY);
-        } else if (activeTouches.size === 2) { // Two touches for pinch-zoom
-            const touches = Array.from(activeTouches.values());
-            lastPinchDist = getDistance(touches[0], touches[1]);
-            lastPanPoint = getMidpoint(touches[0], touches[1]); // Midpoint for zoom anchor
-             // Prevent tools from activating during a pinch
-            if (paper.tool) paper.tool. μέχρι(false); // temporary disable current tool's events
-        }
+        // If code reaches here, it's either:
+        // - A gesture is starting/continuing (handled above for >=2 touches).
+        // - A non-drawing tool is active (select/nodeEdit), or no tool.
+        // - A mouse event for a non-drawing tool.
+        // - The first touch for a non-drawing tool.
+        // These cases can be handled by canvasInteraction or the respective non-drawing tools.
     });
 
     canvas.addEventListener('pointermove', (event) => {
-        if (!activeTouches.has(event.pointerId)) return;
-        activeTouches.set(event.pointerId, {x: event.clientX, y: event.clientY });
+        if (!activeTouches.has(event.pointerId) || !window.isGesturing) {
+            // If not tracking this pointer, or not in a gesture, tools should handle their own drag
+            // Or, if single-finger pan is desired for select/nodeEdit, it could be handled here.
+            // This 'return' relies on drawing tools checking `window.isGesturing` in their onPointerDrag.
+            return;
+        }
 
-        if (activeTouches.size === 1 && lastPanPoint && (window.currentTool === null /* add pan tool condition here */)) {
-            // PAN (single finger, if pan tool active)
-            // const currentPanPoint = new paper.Point(event.offsetX, event.offsetY);
-            // const delta = currentPanPoint.subtract(lastPanPoint).divide(view.zoom);
-            // view.center = view.center.subtract(delta);
-            // lastPanPoint = currentPanPoint;
-        } else if (activeTouches.size === 2 && lastPinchDist && lastPanPoint) {
-            // PINCH-ZOOM (two fingers)
-            const touches = Array.from(activeTouches.values());
-            if (touches.length < 2) return; // Should not happen if size is 2
+        activeTouches.set(event.pointerId, { x: event.clientX, y: event.clientY, id: event.pointerId });
 
-            const currentMidpoint = getMidpoint(touches[0], touches[1]);
-            const currentPinchDist = getDistance(touches[0], touches[1]);
+        if (window.isGesturing && activeTouches.size >= 2 && lastPanPoint !== null) {
+            const touchesArray = Array.from(activeTouches.values());
+            if (touchesArray.length < 2) return; // Need at least two points for gesture
 
-            if (lastPinchDist > 0 && currentPinchDist > 0) {
+            const currentMidpoint = getMidpoint(touchesArray[0], touchesArray[1]);
+            const currentPinchDist = getDistance(touchesArray[0], touchesArray[1]);
+
+            // Pan part (movement of the midpoint)
+            const panDelta = {
+                x: currentMidpoint.x - lastPanPoint.x,
+                y: currentMidpoint.y - lastPanPoint.y
+            };
+            const projectPanDelta = new paper.Point(panDelta.x / view.zoom, panDelta.y / view.zoom);
+            view.center = view.center.subtract(projectPanDelta);
+
+            // Zoom part
+            if (lastPinchDist !== null && lastPinchDist > 0 && currentPinchDist > 0 && Math.abs(currentPinchDist - lastPinchDist) > 0.5) {
                 const scale = currentPinchDist / lastPinchDist;
-                
-                // Calculate view center before zoom for anchoring
-                const viewAnchor = view.viewToProject(new paper.Point(lastPanPoint.x, lastPanPoint.y));
-                
+                const viewAnchorProject = view.viewToProject(new paper.Point(lastPanPoint.x, lastPanPoint.y));
                 view.zoom *= scale;
-
-                // Adjust center to keep anchor point stationary
-                const newViewAnchorPos = view.viewToProject(new paper.Point(lastPanPoint.x, lastPanPoint.y));
-                view.center = view.center.add(viewAnchor.subtract(newViewAnchorPos));
-
+                const newViewAnchorProject = view.viewToProject(new paper.Point(lastPanPoint.x, lastPanPoint.y));
+                view.center = view.center.add(viewAnchorProject.subtract(newViewAnchorProject));
+                lastPinchDist = currentPinchDist; // Update only if zoom happened
             }
-            lastPinchDist = currentPinchDist;
-            lastPanPoint = currentMidpoint; // Update midpoint for continuous zoom anchor
+            
+            lastPanPoint = currentMidpoint;
         }
     });
 
     const onPointerUpOrCancel = (event) => {
+        if (!activeTouches.has(event.pointerId)) return;
+
         activeTouches.delete(event.pointerId);
 
-        if (activeTouches.size < 2) {
+        if (window.isGesturing && activeTouches.size < 2) {
+            // Gesture has ended (less than 2 fingers remain)
+            window.isGesturing = false;
+            // console.log("Gesture ended.");
+            const activeToolInstance = window.activeToolInstance;
+            if (activeToolInstance && activeToolInstance.onGestureEnd) {
+                activeToolInstance.onGestureEnd(); // Notify the tool
+            }
             lastPinchDist = null;
-        }
-        if (activeTouches.size < 1) {
+            lastPanPoint = null; // Reset pan anchor as well
+        } else if (!window.isGesturing && activeTouches.size === 0) {
+            // All pointers up, and not during a gesture
             lastPanPoint = null;
         }
-         if (paper.tool && activeTouches.size < 2) paper.tool.μέχρι(true); // re-enable tool
     };
 
     canvas.addEventListener('pointerup', onPointerUpOrCancel);
     canvas.addEventListener('pointercancel', onPointerUpOrCancel);
-    canvas.addEventListener('pointerleave', onPointerUpOrCancel); // Also handle pointer leaving the canvas
-
-    function getDistance(p1, p2) {
-        return Math.sqrt(Math.pow(p2.x - p1.x, 2) + Math.pow(p2.y - p1.y, 2));
-    }
-
-    function getMidpoint(p1, p2) {
-        return { x: (p1.x + p2.x) / 2, y: (p1.y + p2.y) / 2 };
-    }
+    canvas.addEventListener('pointerleave', (event) => {
+        if (activeTouches.has(event.pointerId)) {
+            onPointerUpOrCancel(event); // Treat leave like up/cancel for gesture state
+        }
+    });
 }
-
-// In app.js, call:
-// import { initCanvasInteraction } from './canvasInteraction.js';
-// initCanvasInteraction(paper.view);
